@@ -162,7 +162,15 @@ bool testWithPython() {
         getline(in, line); py_inv = extractHex(line);
 
         BigNum a(a_hex), b(b_hex), m(m_hex);
-        cout << "--- 用例 " << case_idx << " ---" << endl;
+        cout << "\n--- 用例 " << case_idx << " ---" << endl;
+        cout << "  随机大数 a = " << a << endl;
+        cout << "  随机大数 b = " << b << endl;
+        cout << "  随机大数 m = " << m << endl;
+        cout << "  Python 结果 MUL  = " << py_mul << endl;
+        cout << "  Python 结果 MOD  = " << py_mod << endl;
+        cout << "  Python 结果 POWM = " << py_powm << endl;
+        cout << "  Python 结果 INV  = " << py_inv << endl;
+
         if ((a * b).toHex() == py_mul) cout << "[PASS] 乘法" << endl;
         else { cout << "[FAIL] 乘法" << endl; pass = false; }
         if ((a % m).toHex() == py_mod) cout << "[PASS] 取模" << endl;

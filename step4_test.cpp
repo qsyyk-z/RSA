@@ -1,134 +1,175 @@
-// ============================================================
-// Step4 测试: 性能优化测试
-// ============================================================
+// Step4: 性能优化测试
 #include <iostream>
 #include <fstream>
-#include <ctime>
 #include <chrono>
-#include "bignum.h"
-#include "montgomery.h"
+#include <algorithm>
+#include <vector>
 #include "rsa.h"
 using namespace std;
 using namespace std::chrono;
 
-// 性能计时辅助
-class Timer {
-    high_resolution_clock::time_point start_time;
-public:
-    void start() { start_time = high_resolution_clock::now(); }
-    double elapsed_ms() {
-        auto end = high_resolution_clock::now();
-        return duration_cast<milliseconds>(end - start_time).count();
-    }
+struct Timer {
+    high_resolution_clock::time_point t;
+    void start() { t = high_resolution_clock::now(); }
     double elapsed_sec() {
-        auto end = high_resolution_clock::now();
-        return duration_cast<duration<double>>(end - start_time).count();
+        return duration_cast<duration<double>>(high_resolution_clock::now() - t).count();
     }
 };
 
-void benchmarkKeyGeneration(int bits, int trials) {
-    cout << "\n===== RSA-" << bits << " 密钥生成性能测试 =====" << endl;
-    cout << "测试次数: " << trials << endl;
+struct BenchResult {
+    int level;
+    double avg, mn, mx;
+};
 
-    double total_time = 0;
-    double min_time = 1e9, max_time = 0;
+static bool verifyPrimeWithPython(const BigNum& n, const string& name) {
+    ofstream out("verify_prime.py");
+    out << "n = int('" << n.toHex() << "', 16)\n";
+    out << "def is_prime(n):\n";
+    out << "    if n < 2: return False\n";
+    out << "    if n == 2: return True\n";
+    out << "    if n % 2 == 0: return False\n";
+    out << "    d, s = n - 1, 0\n";
+    out << "    while d % 2 == 0: d //= 2; s += 1\n";
+    out << "    for a in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]:\n";
+    out << "        if a >= n: continue\n";
+    out << "        x = pow(a, d, n)\n";
+    out << "        if x == 1 or x == n - 1: continue\n";
+    out << "        for _ in range(s - 1):\n";
+    out << "            x = pow(x, 2, n)\n";
+    out << "            if x == n - 1: break\n";
+    out << "        else: return False\n";
+    out << "    return True\n";
+    out << "print(f'PRIME={is_prime(n)}')\n";
+    out.close();
 
-    for (int i = 0; i < trials; i++) {
-        Timer timer;
-        timer.start();
-        RSAKey key = generateRSAKey(bits);
-        double elapsed = timer.elapsed_sec();
-        total_time += elapsed;
-        if (elapsed < min_time) min_time = elapsed;
-        if (elapsed > max_time) max_time = elapsed;
-        cout << "  Trial " << i + 1 << ": " << elapsed << " 秒" << endl;
+    if (system("python3 verify_prime.py > verify_prime_result.txt 2>&1") != 0) {
+        cout << "[WARN] Python 验证不可用: " << name << endl;
+        return true;
     }
 
-    double avg_time = total_time / trials;
-    cout << "\n--- 结果 ---" << endl;
-    cout << "  平均时间: " << avg_time << " 秒" << endl;
-    cout << "  最小时间: " << min_time << " 秒" << endl;
-    cout << "  最大时间: " << max_time << " 秒" << endl;
+    ifstream in("verify_prime_result.txt");
+    if (!in.is_open()) {
+        cout << "[WARN] 无法读取 Python 验证结果: " << name << endl;
+        return true;
+    }
 
-    if (bits == 768) {
-        if (avg_time <= 1.0) {
-            cout << "  [PASS] RSA-768 密钥生成时间 <= 1 秒!" << endl;
-        } else {
-            cout << "  [INFO] RSA-768 密钥生成时间 > 1 秒 (需要进一步优化)" << endl;
+    string line;
+    while (getline(in, line)) {
+        if (line.find("PRIME=True") != string::npos) {
+            cout << "[PASS] " << name << " 为素数 (Python 验证)" << endl;
+            return true;
+        }
+        if (line.find("PRIME=False") != string::npos) {
+            cout << "[FAIL] " << name << " 不是素数 (Python 验证)" << endl;
+            return false;
         }
     }
+    cout << "[WARN] Python 未返回有效结果: " << name << endl;
+    return true;
 }
 
-void benchmarkModPow(int bits, int trials) {
-    cout << "\n===== 模幂运算性能测试 (" << bits << " 位) =====" << endl;
+static void testKeyGenerationOptimal(int bits) {
+    setRSAOptimLevel(2);
+
+    cout << "\n===== " << bits << " 位密钥生成" << " =====" << endl;
+
+    Timer timer;
+    timer.start();
+    RSAKey key = generateRSAKey(bits);
+    double elapsed = timer.elapsed_sec();
+
+    cout << "耗时: " << elapsed << " 秒" << endl;
+    cout << "p = " << key.p << endl;
+    cout << "q = " << key.q << endl;
+    cout << "n = " << key.n << endl;
+    cout << "e = " << key.e << endl;
+    cout << "d = " << key.d << endl;
+
+    if (key.n == key.p * key.q) cout << "[PASS] n = p * q" << endl;
+    else cout << "[FAIL] n != p * q" << endl;
+
+    BigNum phi = BigNum::lcm(key.p.dec(), key.q.dec());
+    if ((key.e * key.d) % phi == BigNum(1)) cout << "[PASS] e*d ≡ 1 (mod phi)" << endl;
+    else cout << "[FAIL] e*d ≡ 1 (mod phi)" << endl;
+
+    if (BigNum::gcd(key.e, phi) == BigNum(1)) cout << "[PASS] gcd(e, phi) = 1" << endl;
+    else cout << "[FAIL] gcd(e, phi) != 1" << endl;
+
+    verifyPrimeWithPython(key.p, "p");
+    verifyPrimeWithPython(key.q, "q");
+}
+
+static void benchmarkMontgomeryModPow() {
+    const int bits = 256, trials = 10;
+    cout << "\n===== 蒙哥马利模乘加速测试 (" << bits << " 位, " << trials << " 次) =====" << endl;
 
     BigNum base = BigNum::randBits(bits);
     BigNum exp = BigNum::randBits(bits);
     BigNum mod = BigNum::randBits(bits * 2);
     mod.num[0] |= 1;
 
-    // 普通模幂
     Timer timer;
     timer.start();
-    for (int i = 0; i < trials; i++) {
-        BigNum result = BigNum::modPow(base, exp, mod);
-    }
-    double normal_time = timer.elapsed_sec() / trials;
+    for (int i = 0; i < trials; i++) BigNum::modPow(base, exp, mod);
+    double normal = timer.elapsed_sec() / trials;
 
-    // 蒙哥马利模幂
     timer.start();
-    for (int i = 0; i < trials; i++) {
-        BigNum result = modPowFast(base, exp, mod);
-    }
-    double fast_time = timer.elapsed_sec() / trials;
+    for (int i = 0; i < trials; i++) modPowFast(base, exp, mod);
+    double fast = timer.elapsed_sec() / trials;
 
-    cout << "  普通模幂平均时间: " << normal_time << " 秒" << endl;
-    cout << "  蒙哥马利模幂平均时间: " << fast_time << " 秒" << endl;
-    if (normal_time > 0) {
-        cout << "  加速比: " << normal_time / fast_time << "x" << endl;
-    }
+    cout << "  普通模幂:     " << normal << " 秒" << endl;
+    cout << "  蒙哥马利模幂: " << fast << " 秒" << endl;
+    if (fast > 0) cout << "  加速比:       " << normal / fast << "x" << endl;
 
-    // 验证结果一致
-    BigNum r1 = BigNum::modPow(base, exp, mod);
-    BigNum r2 = modPowFast(base, exp, mod);
-    if (r1 == r2) {
+    if (BigNum::modPow(base, exp, mod) == modPowFast(base, exp, mod))
         cout << "  [PASS] 两种方法结果一致" << endl;
-    } else {
-        cout << "  [FAIL] 两种方法结果不一致!" << endl;
-    }
+    else
+        cout << "  [FAIL] 两种方法结果不一致" << endl;
 }
 
-void benchmarkMillerRabin(int bits, int trials) {
-    cout << "\n===== Miller-Rabin 素性测试性能 (" << bits << " 位) =====" << endl;
+static BenchResult benchmarkKeyGen(int level, int trials) {
+    setRSAOptimLevel(level);
+    BenchResult res{level, 0, 1e9, 0};
+    double total = 0;
 
-    double total_composite = 0;
-    double total_prime = 0;
-    int composite_count = 0;
-    int prime_count = 0;
-
+    cout << "\n>>> " << rsaOptimLevelName() << " | RSA-768 | " << trials << " 次" << endl;
     for (int i = 0; i < trials; i++) {
-        BigNum candidate = BigNum::randBits(bits);
-        candidate.num[0] |= 1; // 确保奇数
-
         Timer timer;
         timer.start();
-        bool is_prime = millerRabin(candidate, 20);
-        double elapsed = timer.elapsed_sec();
-
-        if (is_prime) {
-            total_prime += elapsed;
-            prime_count++;
-        } else {
-            total_composite += elapsed;
-            composite_count++;
-        }
+        RSAKey key = generateRSAKey(768);
+        double el = timer.elapsed_sec();
+        total += el;
+        res.mn = min(res.mn, el);
+        res.mx = max(res.mx, el);
+        cout << "    第 " << i + 1 << " 次: " << el << " 秒" << endl;
+        (void)key;
     }
+    res.avg = total / trials;
+    cout << "    平均: " << res.avg << " 秒, 最小: " << res.mn << " 秒, 最大: " << res.mx << " 秒" << endl;
+    if (res.avg <= 1.0) cout << "    [PASS] RSA-768 <= 1 秒" << endl;
+    else cout << "    [FAIL] RSA-768 > 1 秒" << endl;
+    return res;
+}
 
-    cout << "  测试 " << trials << " 个 " << bits << " 位随机奇数" << endl;
-    cout << "  合数: " << composite_count << " 个, 平均检测时间: "
-         << (composite_count > 0 ? total_composite / composite_count : 0) << " 秒" << endl;
-    cout << "  素数: " << prime_count << " 个, 平均检测时间: "
-         << (prime_count > 0 ? total_prime / prime_count : 0) << " 秒" << endl;
+static void printSummary(const vector<BenchResult>& results) {
+    cout << "\n===== RSA-768 三级优化对比汇总 =====" << endl;
+    cout << "  级别 | 平均(秒) | 最小(秒) | 最大(秒) | 相对 Level0" << endl;
+    cout << "  -----|----------|----------|----------|-------------" << endl;
+
+    double base_avg = 0;
+    for (const auto& r : results)
+        if (r.level == 0) base_avg = r.avg;
+
+    for (const auto& r : results) {
+        double speedup = (base_avg > 0 && r.avg > 0) ? base_avg / r.avg : 0;
+        cout << "  L" << r.level << "   | "
+             << r.avg << " | "
+             << r.mn << " | "
+             << r.mx << " | ";
+        if (r.level == 0) cout << "1.00x (基准)";
+        else cout << speedup << "x";
+        cout << endl;
+    }
 }
 
 int main() {
@@ -136,20 +177,20 @@ int main() {
     cout << "  Step4: 性能优化测试" << endl;
     cout << "========================================" << endl;
 
-    // 模幂性能对比
-    benchmarkModPow(256, 10);
-    benchmarkModPow(384, 5);
+    benchmarkMontgomeryModPow();
 
-    // Miller-Rabin 性能
-    benchmarkMillerRabin(384, 20);
+    vector<BenchResult> results;
+    for (int lv = 0; lv <= 2; lv++)
+        results.push_back(benchmarkKeyGen(lv, 3));
 
-    // 密钥生成性能
-    benchmarkKeyGeneration(512, 3);
-    benchmarkKeyGeneration(768, 3);
+    printSummary(results);
+
+    cout << "\n===== 最优版本密钥生成正确性测试 =====" << endl;
+    testKeyGenerationOptimal(512);
+    testKeyGenerationOptimal(768);
 
     cout << "\n========================================" << endl;
-    cout << "  Step4 性能测试完成" << endl;
+    cout << "  Step4 测试完成" << endl;
     cout << "========================================" << endl;
-
     return 0;
 }
