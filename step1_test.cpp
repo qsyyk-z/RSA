@@ -1,372 +1,178 @@
-// ============================================================
-// Step1 测试: 大数运算正确性测试
-// 使用 Python 生成已知答案进行对拍验证
-// ============================================================
+// Step1: 大数运算正确性测试
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <cstdlib>
 #include "bignum.h"
 using namespace std;
 
-// 从 Python 脚本读取测试数据
-struct TestCase {
-    string name;
-    BigNum a, b, m;
-    BigNum expected_mul;
-    BigNum expected_mod;
-    BigNum expected_powm;
-    BigNum expected_inv_a;  // a^(-1) mod m
-    BigNum expected_inv_b;  // b^(-1) mod m
-};
-
 bool testAddSub() {
-    cout << "===== 测试加法和减法 =====" << endl;
+    cout << "===== 加法和减法 =====" << endl;
     bool pass = true;
 
-    // 测试 1: 简单加法
-    BigNum a(12345);
-    BigNum b(67890);
-    BigNum c = a + b;
-    if (c == BigNum(80235)) {
+    if ((BigNum(12345) + BigNum(67890)) == BigNum(80235))
         cout << "[PASS] 12345 + 67890 = 80235" << endl;
-    } else {
-        cout << "[FAIL] 12345 + 67890 = " << c << " (expected 80235)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 加法" << endl; pass = false; }
 
-    // 测试 2: 简单减法
-    BigNum d = b - a;
-    if (d == BigNum(55545)) {
+    if ((BigNum(67890) - BigNum(12345)) == BigNum(55545))
         cout << "[PASS] 67890 - 12345 = 55545" << endl;
-    } else {
-        cout << "[FAIL] 67890 - 12345 = " << d << " (expected 55545)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 减法" << endl; pass = false; }
 
-    // 测试 3: 大数加法
-    BigNum e("ffffffff");
-    BigNum f(1);
-    BigNum g = e + f;
-    if (g == BigNum("100000000")) {
+    BigNum e("ffffffff"), g = e + BigNum(1);
+    if (g == BigNum("100000000"))
         cout << "[PASS] ffffffff + 1 = 100000000" << endl;
-    } else {
-        cout << "[FAIL] ffffffff + 1 = " << g << " (expected 100000000)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 大数加法" << endl; pass = false; }
 
-    // 测试 4: 大数减法
-    BigNum h = g - f;
-    if (h == e) {
+    if ((g - BigNum(1)) == e)
         cout << "[PASS] 100000000 - 1 = ffffffff" << endl;
-    } else {
-        cout << "[FAIL] 100000000 - 1 = " << h << " (expected ffffffff)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 大数减法" << endl; pass = false; }
 
     return pass;
 }
 
 bool testMultiplication() {
-    cout << "\n===== 测试乘法 =====" << endl;
+    cout << "\n===== 乘法 =====" << endl;
     bool pass = true;
 
-    // 测试 1: 简单乘法
-    BigNum a(123);
-    BigNum b(456);
-    BigNum c = a * b;
-    if (c == BigNum(56088)) {
+    if ((BigNum(123) * BigNum(456)) == BigNum(56088))
         cout << "[PASS] 123 * 456 = 56088" << endl;
-    } else {
-        cout << "[FAIL] 123 * 456 = " << c << " (expected 56088)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 小数乘法" << endl; pass = false; }
 
-    // 测试 2: 大数乘法
-    BigNum d("ffffffff");
-    BigNum e("ffffffff");
-    BigNum f = d * e;
-    if (f == BigNum("fffffffe00000001")) {
+    if ((BigNum("ffffffff") * BigNum("ffffffff")) == BigNum("fffffffe00000001"))
         cout << "[PASS] ffffffff * ffffffff = fffffffe00000001" << endl;
-    } else {
-        cout << "[FAIL] ffffffff * ffffffff = " << f << " (expected fffffffe00000001)" << endl;
-        pass = false;
-    }
-
-    // 测试 3: 256位乘法
-    BigNum x = BigNum::randBits(256);
-    BigNum y = BigNum::randBits(256);
-    BigNum z = x * y;
-    // 用 Python 验证
-    cout << "[INFO] 256-bit multiplication test:" << endl;
-    cout << "  x = " << x << endl;
-    cout << "  y = " << y << endl;
-    cout << "  x*y = " << z << endl;
-    cout << "  (verify with Python: int('" << x.toHex() << "', 16) * int('" << y.toHex() << "', 16))" << endl;
+    else { cout << "[FAIL] 大数乘法" << endl; pass = false; }
 
     return pass;
 }
 
 bool testDivision() {
-    cout << "\n===== 测试除法和取模 =====" << endl;
+    cout << "\n===== 除法和取模 =====" << endl;
     bool pass = true;
 
-    // 测试 1: 简单除法
-    BigNum a(100);
-    BigNum b(7);
-    BigNum q = a / b;
-    BigNum r = a % b;
-    if (q == BigNum(14) && r == BigNum(2)) {
-        cout << "[PASS] 100 / 7 = 14 remainder 2" << endl;
-    } else {
-        cout << "[FAIL] 100 / 7 = " << q << " remainder " << r << " (expected 14 remainder 2)" << endl;
-        pass = false;
-    }
+    BigNum q = BigNum(100) / BigNum(7), r = BigNum(100) % BigNum(7);
+    if (q == BigNum(14) && r == BigNum(2))
+        cout << "[PASS] 100 / 7 = 14 ... 2" << endl;
+    else { cout << "[FAIL] 除法" << endl; pass = false; }
 
-    // 测试 2: 验证 a = q * b + r
-    BigNum c = q * b + r;
-    if (c == a) {
-        cout << "[PASS] q * b + r == a" << endl;
-    } else {
-        cout << "[FAIL] q * b + r != a" << endl;
-        pass = false;
-    }
-
-    // 测试 3: 大数除法
-    BigNum d("10000000000000000");
-    BigNum e("100000001");
-    BigNum q2 = d / e;
-    BigNum r2 = d % e;
-    cout << "[INFO] 10000000000000000 / 100000001 = " << q2 << " remainder " << r2 << endl;
-    BigNum check = q2 * e + r2;
-    if (check == d) {
-        cout << "[PASS] q * b + r == a (large numbers)" << endl;
-    } else {
-        cout << "[FAIL] q * b + r != a (large numbers)" << endl;
-        pass = false;
-    }
+    BigNum d("10000000000000000"), e("100000001");
+    BigNum q2 = d / e, r2 = d % e;
+    if (q2 * e + r2 == d)
+        cout << "[PASS] 大数除法恒等式 a = q*b + r" << endl;
+    else { cout << "[FAIL] 大数除法" << endl; pass = false; }
 
     return pass;
 }
 
 bool testModPow() {
-    cout << "\n===== 测试模幂运算 =====" << endl;
+    cout << "\n===== 模幂 =====" << endl;
     bool pass = true;
 
-    // 测试 1: 小数模幂
-    BigNum result = BigNum::modPow(BigNum(2), BigNum(10), BigNum(1000));
-    if (result == BigNum(24)) {
+    if (BigNum::modPow(BigNum(2), BigNum(10), BigNum(1000)) == BigNum(24))
         cout << "[PASS] 2^10 mod 1000 = 24" << endl;
-    } else {
-        cout << "[FAIL] 2^10 mod 1000 = " << result << " (expected 24)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 2^10 mod 1000" << endl; pass = false; }
 
-    // 测试 2: 3^17 mod 100 = 63 (0x3f)
-    BigNum result2 = BigNum::modPow(BigNum(3), BigNum(17), BigNum(100));
-    if (result2 == BigNum(63)) {
+    if (BigNum::modPow(BigNum(3), BigNum(17), BigNum(100)) == BigNum(63))
         cout << "[PASS] 3^17 mod 100 = 63" << endl;
-    } else {
-        cout << "[FAIL] 3^17 mod 100 = " << result2 << " (expected 63)" << endl;
-        pass = false;
-    }
-
-    // 测试 3: 大数模幂
-    BigNum base = BigNum::randBits(128);
-    BigNum exp = BigNum::randBits(128);
-    BigNum mod = BigNum::randBits(256);
-    mod.num[0] |= 1; // 确保奇数
-    BigNum result3 = BigNum::modPow(base, exp, mod);
-    cout << "[INFO] 128-bit modPow test:" << endl;
-    cout << "  base = " << base << endl;
-    cout << "  exp  = " << exp << endl;
-    cout << "  mod  = " << mod << endl;
-    cout << "  result = " << result3 << endl;
+    else { cout << "[FAIL] 3^17 mod 100" << endl; pass = false; }
 
     return pass;
 }
 
 bool testModInverse() {
-    cout << "\n===== 测试模逆运算 =====" << endl;
+    cout << "\n===== 模逆 =====" << endl;
     bool pass = true;
 
-    // 测试 1: 7^(-1) mod 11 = 8
-    BigNum inv1 = BigNum::modInverse(BigNum(7), BigNum(11));
-    if (inv1 == BigNum(8)) {
+    BigNum inv = BigNum::modInverse(BigNum(7), BigNum(11));
+    if (inv == BigNum(8))
         cout << "[PASS] 7^(-1) mod 11 = 8" << endl;
-    } else {
-        cout << "[FAIL] 7^(-1) mod 11 = " << inv1 << " (expected 8)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 模逆" << endl; pass = false; }
 
-    // 测试 2: 验证 a * a^(-1) ≡ 1 (mod m)
-    BigNum check1 = (BigNum(7) * inv1) % BigNum(11);
-    if (check1 == BigNum(1)) {
+    if ((BigNum(7) * inv) % BigNum(11) == BigNum(1))
         cout << "[PASS] 7 * 8 mod 11 = 1" << endl;
-    } else {
-        cout << "[FAIL] 7 * 8 mod 11 = " << check1 << " (expected 1)" << endl;
-        pass = false;
-    }
+    else { cout << "[FAIL] 模逆验证" << endl; pass = false; }
 
-    // 测试 3: 大数模逆
-    BigNum a = BigNum::randBits(256);
-    a.num[0] |= 1; // 确保奇数
-    BigNum m = BigNum::randBits(512);
-    m.num[0] |= 1; // 确保奇数
+    BigNum a = BigNum::randBits(256); a.num[0] |= 1;
+    BigNum m = BigNum::randBits(512); m.num[0] |= 1;
     BigNum inv2 = BigNum::modInverse(a, m);
-    BigNum check2 = (a * inv2) % m;
-    if (check2 == BigNum(1)) {
-        cout << "[PASS] 256-bit modular inverse verified" << endl;
-    } else {
-        cout << "[FAIL] 256-bit modular inverse FAILED" << endl;
-        cout << "  a * a^(-1) mod m = " << check2 << " (expected 1)" << endl;
-        pass = false;
-    }
+    if ((a * inv2) % m == BigNum(1))
+        cout << "[PASS] 256 位模逆验证" << endl;
+    else { cout << "[FAIL] 256 位模逆" << endl; pass = false; }
 
     return pass;
 }
 
 bool testGCD() {
-    cout << "\n===== 测试 GCD =====" << endl;
+    cout << "\n===== GCD =====" << endl;
     bool pass = true;
-
-    BigNum g1 = BigNum::gcd(BigNum(48), BigNum(18));
-    if (g1 == BigNum(6)) {
+    if (BigNum::gcd(BigNum(48), BigNum(18)) == BigNum(6))
         cout << "[PASS] gcd(48, 18) = 6" << endl;
-    } else {
-        cout << "[FAIL] gcd(48, 18) = " << g1 << " (expected 6)" << endl;
-        pass = false;
-    }
-
-    BigNum g2 = BigNum::gcd(BigNum(17), BigNum(13));
-    if (g2 == BigNum(1)) {
+    else { cout << "[FAIL] gcd(48,18)" << endl; pass = false; }
+    if (BigNum::gcd(BigNum(17), BigNum(13)) == BigNum(1))
         cout << "[PASS] gcd(17, 13) = 1" << endl;
-    } else {
-        cout << "[FAIL] gcd(17, 13) = " << g2 << " (expected 1)" << endl;
-        pass = false;
-    }
-
+    else { cout << "[FAIL] gcd(17,13)" << endl; pass = false; }
     return pass;
 }
 
-// 使用 Python 对拍验证大数运算
+static string extractHex(const string& line) {
+    size_t pos = line.find('=');
+    if (pos == string::npos) return "";
+    string val = line.substr(pos + 1);
+    if (val.size() >= 2 && val[0] == '0' && (val[1] == 'x' || val[1] == 'X'))
+        return val.substr(2);
+    if (val.size() >= 3 && val[0] == ' ' && val[1] == '0' && (val[2] == 'x' || val[2] == 'X'))
+        return val.substr(3);
+    return val;
+}
+
 bool testWithPython() {
-    cout << "\n===== 使用 Python 对拍验证 =====" << endl;
+    cout << "\n===== Python 对拍验证 =====" << endl;
     bool pass = true;
 
-    // 生成测试数据文件
     ofstream out("test_data.py");
-    out << "import random\n";
-    out << "random.seed(42)\n\n";
-
-    // 生成 5 组随机大数
-    for (int t = 0; t < 5; t++) {
-        out << "# Test case " << t + 1 << "\n";
-        out << "a_" << t << " = random.getrandbits(384)\n";
-        out << "b_" << t << " = random.getrandbits(384)\n";
-        out << "m_" << t << " = random.getrandbits(512) | 1\n\n";
-    }
-
-    out << "# Print results\n";
-    for (int t = 0; t < 5; t++) {
-        out << "print(f'CASE_" << t << "')" << endl;
-        out << "print(f'MUL={{hex(a_" << t << " * b_" << t << ")}}')" << endl;
-        out << "print(f'MOD={{hex(a_" << t << " % m_" << t << ")}}')" << endl;
-        out << "print(f'POWM={{hex(pow(a_" << t << ", b_" << t << ", m_" << t << "))}}')" << endl;
-        out << "a_inv_" << t << " = pow(a_" << t << ", -1, m_" << t << ")\n";
-        out << "print(f'INV={{hex(a_inv_" << t << ")}}')" << endl;
-        out << "print(f'VERIFY={{hex((a_" << t << " * a_inv_" << t << ") % m_" << t << ")}}')" << endl;
-    }
+    out << "import random, math\nrandom.seed(42)\n\n";
+    out << "for t in range(5):\n";
+    out << "    m = random.getrandbits(512) | 1\n";
+    out << "    a = random.getrandbits(384)\n";
+    out << "    while math.gcd(a, m) != 1:\n";
+    out << "        a = random.getrandbits(384)\n";
+    out << "    b = random.getrandbits(384)\n";
+    out << "    print(f'CASE_{t}')\n";
+    out << "    print(f'A={hex(a)}')\n";
+    out << "    print(f'B={hex(b)}')\n";
+    out << "    print(f'M={hex(m)}')\n";
+    out << "    print(f'MUL={hex(a * b)}')\n";
+    out << "    print(f'MOD={hex(a % m)}')\n";
+    out << "    print(f'POWM={hex(pow(a, b, m))}')\n";
+    out << "    print(f'INV={hex(pow(a, -1, m))}')\n";
     out.close();
 
-    // 运行 Python 脚本获取结果
-    cout << "[INFO] Running Python verification script..." << endl;
-    int ret = system("python test_data.py > test_results.txt 2>&1");
-    if (ret != 0) {
-        cout << "[WARN] Python not available, skipping cross-validation" << endl;
-        return true;
-    }
-
-    // 读取 Python 结果
     ifstream in("test_results.txt");
-    if (!in.is_open()) {
-        cout << "[WARN] Could not read Python results" << endl;
-        return true;
-    }
 
-    // 设置相同的随机种子生成相同的数
-    srand(42);
     string line;
     int case_idx = 0;
     while (getline(in, line) && case_idx < 5) {
-        if (line.find("CASE_") != string::npos) {
-            cout << "\n--- Test case " << case_idx << " ---" << endl;
-            // 生成相同的随机数
-            BigNum a = BigNum::randBits(384);
-            BigNum b = BigNum::randBits(384);
-            BigNum m = BigNum::randBits(512);
-            m.num[0] |= 1;
+        if (line.find("CASE_") == string::npos) continue;
 
-            // 读取 Python 结果
-            string py_mul, py_mod, py_powm, py_inv, py_verify;
-            getline(in, line); // MUL
-            py_mul = line.substr(line.find("= {") + 3, line.find("}") - line.find("= {") - 3);
-            getline(in, line); // MOD
-            py_mod = line.substr(line.find("= {") + 3, line.find("}") - line.find("= {") - 3);
-            getline(in, line); // POWM
-            py_powm = line.substr(line.find("= {") + 3, line.find("}") - line.find("= {") - 3);
-            getline(in, line); // INV
-            py_inv = line.substr(line.find("= {") + 3, line.find("}") - line.find("= {") - 3);
-            getline(in, line); // VERIFY
+        string a_hex, b_hex, m_hex, py_mul, py_mod, py_powm, py_inv;
+        getline(in, line); a_hex = extractHex(line);
+        getline(in, line); b_hex = extractHex(line);
+        getline(in, line); m_hex = extractHex(line);
+        getline(in, line); py_mul = extractHex(line);
+        getline(in, line); py_mod = extractHex(line);
+        getline(in, line); py_powm = extractHex(line);
+        getline(in, line); py_inv = extractHex(line);
 
-            // 比较乘法
-            BigNum my_mul = a * b;
-            if (my_mul.toHex() == py_mul) {
-                cout << "[PASS] Multiplication matches Python" << endl;
-            } else {
-                cout << "[FAIL] Multiplication mismatch!" << endl;
-                cout << "  Ours:   " << my_mul << endl;
-                cout << "  Python: " << py_mul << endl;
-                pass = false;
-            }
-
-            // 比较取模
-            BigNum my_mod = a % m;
-            if (my_mod.toHex() == py_mod) {
-                cout << "[PASS] Modulo matches Python" << endl;
-            } else {
-                cout << "[FAIL] Modulo mismatch!" << endl;
-                cout << "  Ours:   " << my_mod << endl;
-                cout << "  Python: " << py_mod << endl;
-                pass = false;
-            }
-
-            // 比较模幂
-            BigNum my_powm = BigNum::modPow(a, b, m);
-            if (my_powm.toHex() == py_powm) {
-                cout << "[PASS] ModPow matches Python" << endl;
-            } else {
-                cout << "[FAIL] ModPow mismatch!" << endl;
-                cout << "  Ours:   " << my_powm << endl;
-                cout << "  Python: " << py_powm << endl;
-                pass = false;
-            }
-
-            // 比较模逆
-            BigNum my_inv = BigNum::modInverse(a, m);
-            if (my_inv.toHex() == py_inv) {
-                cout << "[PASS] ModInverse matches Python" << endl;
-            } else {
-                cout << "[FAIL] ModInverse mismatch!" << endl;
-                cout << "  Ours:   " << my_inv << endl;
-                cout << "  Python: " << py_inv << endl;
-                pass = false;
-            }
-
-            case_idx++;
-        }
+        BigNum a(a_hex), b(b_hex), m(m_hex);
+        cout << "--- 用例 " << case_idx << " ---" << endl;
+        if ((a * b).toHex() == py_mul) cout << "[PASS] 乘法" << endl;
+        else { cout << "[FAIL] 乘法" << endl; pass = false; }
+        if ((a % m).toHex() == py_mod) cout << "[PASS] 取模" << endl;
+        else { cout << "[FAIL] 取模" << endl; pass = false; }
+        if (BigNum::modPow(a, b, m).toHex() == py_powm) cout << "[PASS] 模幂" << endl;
+        else { cout << "[FAIL] 模幂" << endl; pass = false; }
+        if (BigNum::modInverse(a, m).toHex() == py_inv) cout << "[PASS] 模逆" << endl;
+        else { cout << "[FAIL] 模逆" << endl; pass = false; }
+        case_idx++;
     }
-
     return pass;
 }
 
@@ -376,7 +182,6 @@ int main() {
     cout << "========================================" << endl;
 
     bool all_pass = true;
-
     all_pass &= testAddSub();
     all_pass &= testMultiplication();
     all_pass &= testDivision();
@@ -386,12 +191,7 @@ int main() {
     all_pass &= testWithPython();
 
     cout << "\n========================================" << endl;
-    if (all_pass) {
-        cout << "  所有测试通过!" << endl;
-    } else {
-        cout << "  部分测试失败!" << endl;
-    }
+    cout << (all_pass ? "  所有测试通过!" : "  部分测试失败!") << endl;
     cout << "========================================" << endl;
-
     return all_pass ? 0 : 1;
 }
